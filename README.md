@@ -1,6 +1,6 @@
 # Automação de Cálculo de Benefício de Vale-Refeição (VR)
 
-Este projeto é uma aplicação web interativa desenvolvida em Python para automatizar o processo de cálculo do benefício de Vale-Refeição (VR) para colaboradores.
+Este projeto é uma aplicação web interativa desenvolvida em Python para automatizar o processo de cálcul do benefício de Vale-Refeição (VR) para colaboradores.
 
 A aplicação consolida dados de múltiplas planilhas do Excel, realiza filtros e cálculos complexos, e gera um arquivo Excel final com o relatório completo e preciso.
 
