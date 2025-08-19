@@ -1,35 +1,43 @@
 import streamlit as st
 import pandas as pd
+import zipfile 
 import io
 
 # Título da aplicação
-st.title('Automação de VR')
-st.markdown('### Carregue os arquivos para processamento')
+st.title('Valle.ai - Assistente inteligente para cálculo de Vale-Alimentação/Refeição')
+st.markdown('### Carregue o arquivo zip contendo as planilhas para processamento')
 
-# Dicionário para armazenar os arquivos carregados
-uploaded_files = {
-    'ATIVOS': st.file_uploader("1. Carregue 'ATIVOS.xlsx'", type=['xlsx']),
-    'DESLIGADOS': st.file_uploader("2. Carregue 'DESLIGADOS.xlsx'", type=['xlsx']),
-    'AFASTAMENTOS': st.file_uploader("3. Carregue 'AFASTAMENTOS.xlsx'", type=['xlsx']),
-    'FÉRIAS': st.file_uploader("4. Carregue 'FÉRIAS.xlsx'", type=['xlsx']),
-    'ADMISSAO_ABRIL': st.file_uploader("5. Carregue 'ADMISSÃO ABRIL.xlsx'", type=['xlsx']),
-    'APRENDIZ': st.file_uploader("6. Carregue 'APRENDIZ.xlsx'", type=['xlsx']),
-    'ESTAGIO': st.file_uploader("7. Carregue 'ESTÁGIO.xlsx'", type=['xlsx']),
-    'EXTERIOR': st.file_uploader("8. Carregue 'EXTERIOR.xlsx'", type=['xlsx']),
-    'DIAS_UTEIS': st.file_uploader("9. Carregue 'Base dias uteis.xlsx'", type=['xlsx']),
-    'SINDICATO_VALOR': st.file_uploader("10. Carregue 'Base sindicato x valor.xlsx'", type=['xlsx']),
-}
+# Passo 1: Upload do arquivo ZIP
+zip_file = st.file_uploader("Selecione ou arraste o arquivo ZIP aqui", type=["zip"])
+
+if zip_file is not None:
+    with zipfile.ZipFile(zip_file) as z:
+        # Lista de arquivos extraídos em memória
+        xlsx_files = [f for f in z.namelist() if f.endswith(".xlsx")]
+
+        if not xlsx_files:
+            st.warning("Nenhum arquivo .xlsx encontrado dentro do ZIP.")
+        else:
+            st.info(f"Encontrados {len(xlsx_files)} arquivos XLSX.")
+
+            for file_name in xlsx_files:
+                with z.open(file_name) as f:
+                    # Carrega o Excel diretamente do BytesIO
+                    df = pd.read_excel(io.BytesIO(f.read()))
+                    st.subheader(file_name)
+                    st.dataframe(df)
+                    st.success(f'Carregando arquivo {file_name}...Concluído.')
 
 # Botão para iniciar o processamento
 if st.button('Processar'):
     # Verifica se todos os arquivos foram carregados antes de iniciar o processamento
-    if all(uploaded_files.values()):
+    if all(xlsx_files.values()):
         st.write("Iniciando o processamento dos dados...")
         
         try:
             # Dicionário para armazenar os DataFrames
             dataframes = {}
-            for key, uploaded_file in uploaded_files.items():
+            for key, uploaded_file in xlsx_files.items():
                 # Tenta ler com header na linha 1 e ajusta para casos específicos
                 try:
                     df = pd.read_excel(uploaded_file, header=1)
