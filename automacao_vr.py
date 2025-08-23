@@ -1,145 +1,254 @@
 import streamlit as st
 import pandas as pd
-import zipfile 
+import zipfile
 import io
+import re
 
 # Título da aplicação
-st.title('Valle.ai - Assistente inteligente para cálculo de Vale-Alimentação/Refeição')
+st.title('Valle.ai - Assistente inteligente para projeto de Vale-Alimentação/Refeição')
 st.markdown('### Carregue o arquivo zip contendo as planilhas para processamento')
+
+# Dicionário para armazenar os DataFrames extraídos do ZIP
+dataframes = {}
+
+# Mapeamento de nomes de arquivos para chaves internas
+file_name_mapping = {
+    'ATIVOS': 'ATIVOS',
+    'ADMISSAO_ABRIL': 'ADMISSÃO_ABRIL',
+    'DESLIGADOS': 'DESLIGADOS',
+    'AFASTAMENTOS': 'AFASTAMENTOS',
+    'EXTERIOR': 'EXTERIOR',
+    'ESTAGIO': 'ESTAGIO',
+    'APRENDIZ': 'APRENDIZ',
+    'BASE_DIAS_UTEIS': 'BASE_DIAS_UTEIS',
+    'BASE_SINDICATO_X_VALOR': 'BASE_SINDICATO_X_VALOR',
+    'VR_MENSAL': 'VR_MENSAL',
+    'FERIAS': 'FERIAS'
+}
+
+# Dicionário para mapear sindicatos a valores fixos
+valor_sindicato_fixo = {
+    'SINDPD SP - SIND.TRAB.EM PROC DADOS E EMPR.EMPRESAS PROC DADOS ESTADO DE SP.': 37.50,
+    'SITEPD PR - SIND DOS TRAB EM EMPR PRIVADAS DE PROC DE DADOS DE CURITIBA E REGIAO METROPOLITANA': 35.00
+}
+
+# Dicionário de feriados por estado para abril de 2025
+feriados_por_estado = {
+    'RS': ['2025-04-18', '2025-04-21'],
+    'RJ': ['2025-04-18', '2025-04-21', '2025-04-23']
+}
+
+# Dicionário de regras para afastamentos
+regras_afastamento = {
+    'SINDPPD-RS': {
+        'LICENÇA-MATERNIDADE': 1.0,
+        'AUXÍLIO-DOENÇA': 0.30
+    }
+}
+
+# Função para padronizar nomes de colunas
+def standardize_columns(df):
+    new_cols = {}
+    for col in df.columns:
+        new_col = str(col).upper().strip().replace('.', '').replace(' ', '_').replace('Ç', 'C').replace('Ã', 'A').replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
+        new_cols[col] = new_col
+    return df.rename(columns=new_cols)
+
+# Função para encontrar a linha do cabeçalho
+def find_header(file_data):
+    file_data.seek(0)
+    df_temp = pd.read_excel(file_data, nrows=10, header=None, engine='openpyxl')
+    for i, row in df_temp.iterrows():
+        header_names = [str(c).upper().strip().replace('.', '').replace(' ', '_').replace('Ç', 'C') for c in row if isinstance(c, str)]
+        if any(col in header_names for col in ['MATRICULA', 'CADASTRO', 'SINDICATO', 'TITULO_DO_CARGO']):
+            return i
+    file_data.seek(0)
+    return 0
+
+# Função para encontrar a coluna de afastamento
+def find_afastamento_column(df):
+    for col in df.columns:
+        col_normalized = str(col).upper().replace(' ', '').replace('.', '')
+        if 'DESCSITUACAO' in col_normalized or 'TIPOAFASTAMENTO' in col_normalized:
+            return col
+    return None
 
 # Passo 1: Upload do arquivo ZIP
 zip_file = st.file_uploader("Selecione ou arraste o arquivo ZIP aqui", type=["zip"])
 
 if zip_file is not None:
-    with zipfile.ZipFile(zip_file) as z:
-        # Lista de arquivos extraídos em memória
-        xlsx_files = [f for f in z.namelist() if f.endswith(".xlsx")]
-
-        if not xlsx_files:
-            st.warning("Nenhum arquivo .xlsx encontrado dentro do ZIP.")
-        else:
-            st.info(f"Encontrados {len(xlsx_files)} arquivos XLSX.")
-
-            for file_name in xlsx_files:
-                with z.open(file_name) as f:
-                    # Carrega o Excel diretamente do BytesIO
-                    df = pd.read_excel(io.BytesIO(f.read()))
-                    st.subheader(file_name)
-                    st.dataframe(df)
-                    st.success(f'Carregando arquivo {file_name}...Concluído.')
-
-# Botão para iniciar o processamento
-if st.button('Processar'):
-    # Verifica se todos os arquivos foram carregados antes de iniciar o processamento
-    if all(xlsx_files.values()):
-        st.write("Iniciando o processamento dos dados...")
-        
+    with st.spinner("Extraindo arquivos..."):
         try:
-            # Dicionário para armazenar os DataFrames
-            dataframes = {}
-            for key, uploaded_file in xlsx_files.items():
-                # Tenta ler com header na linha 1 e ajusta para casos específicos
-                try:
-                    df = pd.read_excel(uploaded_file, header=1)
-                except Exception:
-                    df = pd.read_excel(uploaded_file, header=0)
-                
-                # Limpa os nomes das colunas
-                df.columns = df.columns.str.strip().str.upper()
-                dataframes[key] = df
+            with zipfile.ZipFile(zip_file, 'r') as z:
+                st.write("Arquivos encontrados no ZIP:")
+                for file_name in z.namelist():
+                    if file_name.endswith(".xlsx") and not file_name.startswith('__MACOSX'):
+                        st.write(f"- {file_name.split('/')[-1]}")
+                        
+                        with z.open(file_name) as f:
+                            file_data = io.BytesIO(f.read())
+                            
+                            try:
+                                header_row = find_header(file_data)
+                                df = pd.read_excel(file_data, header=header_row, engine='openpyxl')
+                                df = standardize_columns(df)
+                                df = df.loc[:, ~df.columns.str.contains('^UNNAMED', case=False, na=False)]
 
-            st.success("Arquivos carregados com sucesso!")
+                                st.write(f"  → Cabeçalho encontrado e definido na linha: {header_row + 1}")
+                                
+                            except Exception as e:
+                                st.warning(f"Erro ao tentar ler a planilha {file_name.split('/')[-1]}: {e}. O arquivo não será processado.")
+                                continue
 
-            # --- Etapa 1: Consolidar as bases de dados ---
-            st.write("Consolidando bases ATIVOS e ADMISSÃO ABRIL...")
-            # Unir as bases de ativos e admissão
-            base_final = pd.concat([dataframes['ATIVOS'], dataframes['ADMISSAO_ABRIL']], ignore_index=True)
+                            key_raw = file_name.split('/')[-1].upper().replace('.XLSX', '').replace(' ', '_').strip()
+                            found_key = next((v for k, v in file_name_mapping.items() if k in key_raw), None)
+                            
+                            if found_key:
+                                dataframes[found_key] = df
+                            else:
+                                dataframes[key_raw] = df
 
-            # --- Etapa 2: Excluir os colaboradores não elegíveis ---
-            st.write("Excluindo colaboradores desligados, afastados, de férias, estagiários e aprendizes...")
+            st.success("Arquivos extraídos com sucesso!")
+            st.info(f"Arquivos carregados com sucesso: {list(dataframes.keys())}")
             
-            # Excluir desligados
-            df_desligados = dataframes['DESLIGADOS']['MATRICULA'].astype(str).tolist()
-            base_final = base_final[~base_final['MATRICULA'].astype(str).isin(df_desligados)]
-            
-            # Excluir afastados
-            df_afastados = dataframes['AFASTAMENTOS']['MATRICULA'].astype(str).tolist()
-            base_final = base_final[~base_final['MATRICULA'].astype(str).isin(df_afastados)]
-
-            # Excluir de férias (se a coluna 'DESC. SITUACAO' for 'Férias')
-            base_final = base_final[~base_final['DESC. SITUACAO'].str.contains('FÉRIAS', na=False, case=False)]
-            
-            # Excluir estagiários e aprendizes com base no TÍTULO DO CARGO
-            titulos_a_excluir = pd.concat([
-                dataframes['ESTAGIO']['TITULO DO CARGO'], 
-                dataframes['APRENDIZ']['TITULO DO CARGO']
-            ]).unique().tolist()
-            base_final = base_final[~base_final['TITULO DO CARGO'].isin(titulos_a_excluir)]
-            
-            # Excluir quem está no exterior
-            df_exterior = dataframes['EXTERIOR']['CADASTRO'].astype(str).tolist()
-            base_final = base_final[~base_final['MATRICULA'].astype(str).isin(df_exterior)]
-            
-            st.success("Exclusões realizadas com sucesso!")
-
-            # --- Etapa 3: Mesclar com bases de dias úteis e valores do sindicato ---
-            st.write("Mesclando com as bases de dias úteis e valores de sindicato...")
-            
-            # Limpar coluna de sindicato na base_final para mesclar
-            base_final['SINDICATO'] = base_final['SINDICATO'].str.strip()
-
-            # Mesclar com a base de dias úteis
-            dias_uteis_df = dataframes['DIAS_UTEIS'].copy()
-            dias_uteis_df.rename(columns={'SINDICADO': 'SINDICATO', 'DIAS UTEIS ': 'DIAS'}, inplace=True) # Ajuste nos nomes das colunas
-            dias_uteis_df['SINDICATO'] = dias_uteis_df['SINDICATO'].str.strip()
-            base_final = pd.merge(base_final, dias_uteis_df[['SINDICATO', 'DIAS']], on='SINDICATO', how='left')
-            
-            # Mapear a sigla do estado para o nome completo para o merge com a base de valores
-            sindicato_valor_df = dataframes['SINDICATO_VALOR'].copy()
-            sindicato_valor_df.rename(columns={'ESTADO': 'ESTADO', 'VALOR': 'VALOR DIÁRIO VR'}, inplace=True)
-            sindicato_valor_df['ESTADO'] = sindicato_valor_df['ESTADO'].str.strip().str.upper()
-
-            sindicato_mapping = {
-                'SP': 'SÃO PAULO',
-                'RS': 'RIO GRANDE DO SUL',
-                'PR': 'PARANÁ',
-                'RJ': 'RIO DE JANEIRO'
-            }
-            # Extração mais robusta da sigla do estado
-            base_final['ESTADO'] = base_final['SINDICATO'].str.split(' - ').str[0].str[-2:].str.strip().str.upper().map(sindicato_mapping)
-            
-            # Fazer o merge com a base de valores de sindicato
-            base_final = pd.merge(base_final, sindicato_valor_df, on='ESTADO', how='left')
-
-            st.success("Mesclagem concluída!")
-
-            # --- Etapa 4: Calcular o valor do benefício ---
-            st.write("Realizando os cálculos finais...")
-            base_final['TOTAL'] = base_final['DIAS'] * base_final['VALOR DIÁRIO VR']
-            base_final['Custo empresa'] = base_final['TOTAL'] * 0.80
-            base_final['Desconto profissional'] = base_final['TOTAL'] * 0.20
-            
-            # Limpar colunas de mesclagem para o relatório final
-            base_final.drop(columns=['ESTADO'], inplace=True, errors='ignore')
-            
-            st.success('Processamento concluído! O arquivo está pronto para download.')
-            
-            # --- Etapa 5: Gerar o arquivo Excel para download ---
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                base_final.to_excel(writer, index=False, sheet_name='Base Final')
-            output.seek(0)
-            
-            st.download_button(
-                label="Clique para baixar o arquivo",
-                data=output,
-                file_name="Base_VR_Pronta.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
         except Exception as e:
-            st.error(f"Ocorreu um erro durante o processamento: {e}")
-            st.warning("Por favor, verifique se os arquivos estão corretos e tente novamente.")
+            st.error(f"Ocorreu um erro ao extrair o ZIP: {e}")
+            dataframes = {}
 
-    else:
-        st.warning('Por favor, carregue todos os arquivos antes de processar.')
+# --- Botão e Lógica de Processamento ---
+if dataframes and st.button('Processar'):
+    st.write("Iniciando o processamento dos dados...")
+    
+    try:
+        st.write("Consolidando bases ATIVOS e ADMISSÃO ABRIL...")
+        
+        if 'ATIVOS' in dataframes and 'ADMISSÃO_ABRIL' in dataframes:
+            base_ativos = dataframes['ATIVOS'].reset_index(drop=True)
+            base_admissao = dataframes['ADMISSÃO_ABRIL'].reset_index(drop=True)
+            base_final = pd.concat([base_ativos, base_admissao], ignore_index=True)
+        else:
+            st.error("Arquivos ATIVOS ou ADMISSÃO_ABRIL não encontrados.")
+            st.stop()
+        
+        st.write("Excluindo colaboradores desligados, de férias, e que não são elegíveis...")
+        
+        # Exclusão de estagiários e não elegíveis
+        base_final = base_final[~base_final['TITULO_DO_CARGO'].astype(str).str.contains('ESTAGIARIO', na=False, case=False)]
+        
+        if 'OBSERVACOES' in base_final.columns:
+            base_final = base_final[~base_final['OBSERVACOES'].astype(str).str.contains('nao recebe VR', na=False, case=False)]
+        
+        # Exclusão de desligados
+        if 'DESLIGADOS' in dataframes and 'MATRICULA' in dataframes['DESLIGADOS'].columns:
+            desligados_df = dataframes['DESLIGADOS'].copy()
+            matriculas_excluir_comunicado = desligados_df[desligados_df['COMUNICADO_DE_DESLIGAMENTO'].astype(str).str.strip().str.upper() == 'OK']['MATRICULA'].astype(str).tolist()
+            base_final = base_final[~base_final['MATRICULA'].astype(str).isin(matriculas_excluir_comunicado)]
+            
+            desligados_sem_ok = desligados_df[desligados_df['COMUNICADO_DE_DESLIGAMENTO'].astype(str).str.strip().str.upper() != 'OK'].copy()
+            base_final = pd.merge(base_final, desligados_sem_ok[['MATRICULA', 'DATA_DEMISSAO']], on='MATRICULA', how='left')
+        
+        # Exclusão de colaboradores no exterior
+        if 'EXTERIOR' in dataframes:
+            matriculas_a_excluir_exterior = dataframes['EXTERIOR']['CADASTRO'].astype(str).tolist()
+            base_final = base_final[~base_final['MATRICULA'].astype(str).isin(matriculas_a_excluir_exterior)]
+            
+        st.success("Exclusões realizadas com sucesso!")
+
+        st.write("Mesclando com as bases de dias úteis e valores de sindicato...")
+
+        # 1. Cria um mapeamento SINDICATO -> ESTADO a partir da BASE_SINDICATO_X_VALOR
+        sindicato_valor_df = dataframes['BASE_SINDICATO_X_VALOR'].copy()
+        sindicato_valor_df.rename(columns={'UF': 'ESTADO', 'VALOR DIARIO': 'VALOR_DIARIO_VR'}, inplace=True)
+        sindicato_valor_df['ESTADO'] = sindicato_valor_df['ESTADO'].astype(str).str.strip().str.upper()
+        
+        sindicato_estado_map = sindicato_valor_df.set_index('SINDICATO')['ESTADO'].to_dict()
+        valores_diarios_ref = sindicato_valor_df.set_index('ESTADO')['VALOR_DIARIO_VR'].to_dict()
+
+        # 2. Mapeia Sindicato e Estado na base_final
+        base_final['SINDICATO'] = base_final.apply(
+            lambda row: valor_sindicato_fixo.get(str(row['TITULO_DO_CARGO']).strip(), row['SINDICATO'])
+            if pd.isna(row['SINDICATO']) else row['SINDICATO'],
+            axis=1
+        )
+        base_final['SINDICATO'] = base_final.apply(
+            lambda row: 'SINDPPD RS - SINDICATO DOS TRAB. EM PROC. DE DADOS RIO GRANDE DO SUL' 
+            if 'ASSISTENTE_DE_BPO_I' in str(row['TITULO_DO_CARGO']).upper() and pd.isna(row['SINDICATO']) 
+            else row['SINDICATO'],
+            axis=1
+        )
+
+        base_final['ESTADO'] = base_final['SINDICATO'].map(sindicato_estado_map)
+
+        # 3. Mescla com a base de dias úteis e valores de VR
+        dias_uteis_ref = dataframes['BASE_DIAS_UTEIS'].set_index('SINDICATO')['DIAS_UTEIS'].to_dict()
+        base_final['DIAS'] = base_final['SINDICATO'].map(dias_uteis_ref)
+        base_final['VALOR_DIARIO_VR'] = base_final['ESTADO'].map(valores_diarios_ref)
+        
+        # 4. Preenche valores que não foram mapeados com valores padrão
+        base_final['DIAS'] = base_final['DIAS'].fillna(0)
+        base_final['VALOR_DIARIO_VR'] = base_final['VALOR_DIARIO_VR'].fillna(35.00)
+        
+        st.success("Valores de dias e sindicatos atribuídos!")
+        
+        # Mesclagem de férias e afastamentos
+        if 'FERIAS' in dataframes and 'DIAS_DE_FERIAS' in dataframes['FERIAS'].columns:
+            ferias_df = dataframes['FERIAS'].copy()
+            base_final = pd.merge(base_final, ferias_df[['MATRICULA', 'DIAS_DE_FERIAS']], on='MATRICULA', how='left')
+            base_final['DIAS_DE_FERIAS'] = pd.to_numeric(base_final['DIAS_DE_FERIAS'], errors='coerce').fillna(0)
+            base_final['DIAS'] = base_final['DIAS'] - base_final['DIAS_DE_FERIAS']
+        
+        if 'AFASTAMENTOS' in dataframes:
+            afastamentos_df = dataframes['AFASTAMENTOS'].copy()
+            afastamento_col = find_afastamento_column(afastamentos_df)
+            if 'MATRICULA' in afastamentos_df.columns and afastamento_col:
+                afastamentos_df_temp = afastamentos_df[['MATRICULA', afastamento_col]].copy()
+                base_final = pd.merge(base_final, afastamentos_df_temp, on='MATRICULA', how='left')
+                base_final[afastamento_col] = base_final[afastamento_col].astype(str).str.upper().str.strip().str.replace(' ', '-').str.replace('_', '-')
+                base_final['DIAS'] = base_final.apply(
+                    lambda row: (row['DIAS'] * regras_afastamento[row['SINDICATO']][row[afastamento_col]])
+                    if pd.notna(row[afastamento_col]) and str(row['SINDICATO']).strip() in regras_afastamento and str(row[afastamento_col]).strip() in regras_afastamento[str(row['SINDICATO']).strip()]
+                    else row['DIAS'],
+                    axis=1
+                )
+            else:
+                st.warning("Aviso: As colunas de matrícula ou afastamento não foram encontradas na planilha de afastamentos. O cálculo de afastamentos será ignorado.")
+
+        # Lógica para descontar feriados
+        base_final['DIAS_FERIADOS'] = base_final['ESTADO'].apply(
+            lambda x: len(feriados_por_estado.get(str(x).upper().strip(), []))
+        )
+        base_final['DIAS'] = base_final['DIAS'] - base_final['DIAS_FERIADOS']
+        
+        st.success("Mesclagem e atribuição de valores concluídas!")
+
+        st.write("Realizando os cálculos finais...")
+
+        base_final['DIAS'] = pd.to_numeric(base_final['DIAS'], errors='coerce').fillna(0)
+        base_final['VALOR_DIARIO_VR'] = pd.to_numeric(base_final['VALOR_DIARIO_VR'], errors='coerce').fillna(0)
+        
+        base_final['TOTAL'] = base_final['DIAS'] * base_final['VALOR_DIARIO_VR']
+        base_final['Custo_empresa'] = base_final['TOTAL'] * 0.80
+        base_final['Desconto_profissional'] = base_final['TOTAL'] * 0.20
+        
+        if afastamento_col:
+            base_final = base_final.drop(columns=[afastamento_col], errors='ignore')
+        
+        base_final = base_final.drop(columns=['DIAS_DE_FERIAS', 'DIAS_FERIADOS'], errors='ignore')
+
+        st.success('Processamento concluído! O arquivo está pronto para download.')
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            base_final.to_excel(writer, index=False, sheet_name='Base Final')
+        output.seek(0)
+        
+        st.download_button(
+            label="Clique para baixar o arquivo",
+            data=output,
+            file_name="Base_VR_Pronta.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    except Exception as e:
+        st.error(f"Ocorreu um erro durante o processamento: {e}")
+        st.warning("Por favor, verifique se os arquivos estão corretos e tente novamente.")
