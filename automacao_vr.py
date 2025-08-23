@@ -34,16 +34,8 @@ valor_sindicato_fixo = {
 
 # Dicionário de feriados por estado para abril de 2025
 feriados_por_estado = {
-    'RS': ['2025-04-18', '2025-04-21'],
-    'RJ': ['2025-04-18', '2025-04-21', '2025-04-23']
-}
-
-# Dicionário de regras para afastamentos
-regras_afastamento = {
-    'SINDPPD-RS': {
-        'LICENÇA-MATERNIDADE': 1.0,
-        'AUXÍLIO-DOENÇA': 0.30
-    }
+    'RIO GRANDE DO SUL': ['2025-04-18', '2025-04-21'],
+    'RIO DE JANEIRO': ['2025-04-18', '2025-04-21', '2025-04-23']
 }
 
 # Função para padronizar nomes de colunas
@@ -132,25 +124,26 @@ if dataframes and st.button('Processar'):
         
         st.write("Excluindo colaboradores desligados, de férias, e que não são elegíveis...")
         
-        # Exclusão de estagiários e não elegíveis
-        base_final = base_final[~base_final['TITULO_DO_CARGO'].astype(str).str.contains('ESTAGIARIO', na=False, case=False)]
-        
+        # Exclusão de diretores, estagiários e aprendizes por cargo
+        cargos_a_excluir = ['ESTAGIARIO', 'APRENDIZ', 'DIRETOR']
+        base_final = base_final[~base_final['TITULO_DO_CARGO'].astype(str).str.upper().str.contains('|'.join(cargos_a_excluir), na=False, case=False)]
+
+        # Exclusão de colaboradores com anotação de 'não recebe VR'
         if 'OBSERVACOES' in base_final.columns:
             base_final = base_final[~base_final['OBSERVACOES'].astype(str).str.contains('nao recebe VR', na=False, case=False)]
         
-        # Exclusão de desligados
+        # Exclusão de desligados, exterior e afastados por matrícula
+        matriculas_a_excluir = []
         if 'DESLIGADOS' in dataframes and 'MATRICULA' in dataframes['DESLIGADOS'].columns:
-            desligados_df = dataframes['DESLIGADOS'].copy()
-            matriculas_excluir_comunicado = desligados_df[desligados_df['COMUNICADO_DE_DESLIGAMENTO'].astype(str).str.strip().str.upper() == 'OK']['MATRICULA'].astype(str).tolist()
-            base_final = base_final[~base_final['MATRICULA'].astype(str).isin(matriculas_excluir_comunicado)]
-            
-            desligados_sem_ok = desligados_df[desligados_df['COMUNICADO_DE_DESLIGAMENTO'].astype(str).str.strip().str.upper() != 'OK'].copy()
-            base_final = pd.merge(base_final, desligados_sem_ok[['MATRICULA', 'DATA_DEMISSAO']], on='MATRICULA', how='left')
+            matriculas_a_excluir.extend(dataframes['DESLIGADOS']['MATRICULA'].astype(str).tolist())
         
-        # Exclusão de colaboradores no exterior
-        if 'EXTERIOR' in dataframes:
-            matriculas_a_excluir_exterior = dataframes['EXTERIOR']['CADASTRO'].astype(str).tolist()
-            base_final = base_final[~base_final['MATRICULA'].astype(str).isin(matriculas_a_excluir_exterior)]
+        if 'EXTERIOR' in dataframes and 'CADASTRO' in dataframes['EXTERIOR'].columns:
+            matriculas_a_excluir.extend(dataframes['EXTERIOR']['CADASTRO'].astype(str).tolist())
+            
+        if 'AFASTAMENTOS' in dataframes and 'MATRICULA' in dataframes['AFASTAMENTOS'].columns:
+            matriculas_a_excluir.extend(dataframes['AFASTAMENTOS']['MATRICULA'].astype(str).tolist())
+            
+        base_final = base_final[~base_final['MATRICULA'].astype(str).isin(matriculas_a_excluir)]
             
         st.success("Exclusões realizadas com sucesso!")
 
@@ -190,28 +183,12 @@ if dataframes and st.button('Processar'):
         
         st.success("Valores de dias e sindicatos atribuídos!")
         
-        # Mesclagem de férias e afastamentos
+        # Mesclagem de férias e descontos de feriados
         if 'FERIAS' in dataframes and 'DIAS_DE_FERIAS' in dataframes['FERIAS'].columns:
             ferias_df = dataframes['FERIAS'].copy()
             base_final = pd.merge(base_final, ferias_df[['MATRICULA', 'DIAS_DE_FERIAS']], on='MATRICULA', how='left')
             base_final['DIAS_DE_FERIAS'] = pd.to_numeric(base_final['DIAS_DE_FERIAS'], errors='coerce').fillna(0)
             base_final['DIAS'] = base_final['DIAS'] - base_final['DIAS_DE_FERIAS']
-        
-        if 'AFASTAMENTOS' in dataframes:
-            afastamentos_df = dataframes['AFASTAMENTOS'].copy()
-            afastamento_col = find_afastamento_column(afastamentos_df)
-            if 'MATRICULA' in afastamentos_df.columns and afastamento_col:
-                afastamentos_df_temp = afastamentos_df[['MATRICULA', afastamento_col]].copy()
-                base_final = pd.merge(base_final, afastamentos_df_temp, on='MATRICULA', how='left')
-                base_final[afastamento_col] = base_final[afastamento_col].astype(str).str.upper().str.strip().str.replace(' ', '-').str.replace('_', '-')
-                base_final['DIAS'] = base_final.apply(
-                    lambda row: (row['DIAS'] * regras_afastamento[row['SINDICATO']][row[afastamento_col]])
-                    if pd.notna(row[afastamento_col]) and str(row['SINDICATO']).strip() in regras_afastamento and str(row[afastamento_col]).strip() in regras_afastamento[str(row['SINDICATO']).strip()]
-                    else row['DIAS'],
-                    axis=1
-                )
-            else:
-                st.warning("Aviso: As colunas de matrícula ou afastamento não foram encontradas na planilha de afastamentos. O cálculo de afastamentos será ignorado.")
 
         # Lógica para descontar feriados
         base_final['DIAS_FERIADOS'] = base_final['ESTADO'].apply(
@@ -230,11 +207,19 @@ if dataframes and st.button('Processar'):
         base_final['Custo_empresa'] = base_final['TOTAL'] * 0.80
         base_final['Desconto_profissional'] = base_final['TOTAL'] * 0.20
         
-        if afastamento_col:
-            base_final = base_final.drop(columns=[afastamento_col], errors='ignore')
-        
         base_final = base_final.drop(columns=['DIAS_DE_FERIAS', 'DIAS_FERIADOS'], errors='ignore')
 
+        # Incluir linha de soma no final do DataFrame
+        total_total = base_final['TOTAL'].sum()
+        total_custo = base_final['Custo_empresa'].sum()
+        total_desconto = base_final['Desconto_profissional'].sum()
+        
+        # Garantir que a linha de soma tenha o mesmo número de colunas
+        linha_soma = pd.DataFrame([['TOTAIS'] + [''] * (len(base_final.columns) - 4) + [total_total, total_custo, total_desconto]],
+                                  columns=base_final.columns)
+        
+        base_final = pd.concat([base_final, linha_soma], ignore_index=True)
+        
         st.success('Processamento concluído! O arquivo está pronto para download.')
         
         output = io.BytesIO()
