@@ -1,4 +1,4 @@
-Com certeza\! Abaixo está uma explicação detalhada e estruturada de todo o fluxo do nosso código. Você pode usar esta descrição para criar um documento `README.md` completo para o seu projeto.
+openpyxl certeza\! Abaixo está uma explicação detalhada e estruturada de todo o fluxo do nosso código. Você pode usar esta descrição para criar um documento `README.md` completo para o seu projeto.
 
 -----
 
@@ -16,13 +16,10 @@ Para executar o script, você precisa ter o Python instalado e as seguintes bibl
   * `zipfile`
   * `xlsxwriter`
 
-Você pode instalá-las usando o seguinte comando:
+Você instalá-las todas de uma vez só utilizando a ferramenta`pip`:
 
 ```bash
-pip install streamlit pandas openpyxl xlsxwriter
-```
-
-### **Estrutura de Entrada**
+pip install streamlit pandas openpyxl zipfile xlswriterscriinstallutura de Entrada**
 
 O script opera a partir de um único arquivo `.zip` que deve conter as seguintes planilhas no formato `.xlsx`:
 
