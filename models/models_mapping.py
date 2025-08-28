@@ -1,3 +1,8 @@
+"""
+Read and write ZIP files.
+
+XXX references to utf-8 need further investigation.
+"""
 files_mapping = {
     'ATIVOS': 'ATIVOS.xlsx',
     'DESLIGADOS': 'DESLIGADOS.xlsx',
