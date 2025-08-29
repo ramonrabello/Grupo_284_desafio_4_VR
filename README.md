@@ -1,7 +1,3 @@
-Com certeza\! Abaixo está uma explicação detalhada e estruturada de todo o fluxo do nosso código. Você pode usar esta descrição para criar um documento `README.md` completo para o seu projeto.
-
------
-
 ### **Visão Geral**
 
 O script `automacao_vr.py` é uma ferramenta inteligente desenvolvida para automatizar o cálculo de Vale-Alimentação/Refeição (VR). Ele consolida dados de múltiplas planilhas, aplica regras de negócios complexas (como exclusões, descontos de férias e feriados) e gera um arquivo final pronto para uso. O objetivo é simplificar e agilizar o processamento mensal do benefício.
