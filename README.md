@@ -1,87 +1,102 @@
-### **Visão Geral**
+# 🧠 Sistema Multi-Agentes A2A para Cálculo de VR/VA
 
-O script `automacao_vr.py` é uma ferramenta inteligente desenvolvida para automatizar o cálculo de Vale-Alimentação/Refeição (VR). Ele consolida dados de múltiplas planilhas, aplica regras de negócios complexas (como exclusões, descontos de férias e feriados) e gera um arquivo final pronto para uso. O objetivo é simplificar e agilizar o processamento mensal do benefício.
+Este projeto implementa um pipeline distribuído para cálculo de vale-refeição (VR) e vale-alimentação (VA) utilizando agentes autônomos que se comunicam via protocolo A2A (Agent-to-Agent). Cada etapa do processo é executada por um agente remoto, coordenado por um orquestrador central com interface visual em Streamlit.
 
-### **Requisitos**
+---
 
-Para executar o script, você precisa ter o Python instalado e as seguintes bibliotecas:
+## 🚀 Funcionalidades
 
-  * `streamlit`
-  * `pandas`
-  * `openpyxl`
-  * `zipfile`
-  * `xlsxwriter`
+- 📁 Upload de arquivo `.zip` com planilhas
+- 🧠 Execução do pipeline distribuído via orquestrador A2A
+- 🔄 Lógica de recuperação e rollback por agente
+- 📊 Interface Streamlit com barra de progresso e mensagens contextuais
+- 📥 Download do arquivo final `.xlsx`
+- 📜 Histórico persistente por usuário
+- 🔍 Painel de auditoria com rastreamento por agente
+- 🚨 Alertas inteligentes para falhas e lentidão
 
-Você pode instalá-las usando o seguinte comando:
+---
 
-```bash
-pip install streamlit pandas openpyxl xlsxwriter
-```
+## 🧩 Componentes
 
-### **Estrutura de Entrada**
+### 🔗 Orquestrador
 
-O script opera a partir de um único arquivo `.zip` que deve conter as seguintes planilhas no formato `.xlsx`:
+- API FastAPI que coordena o pipeline
+- Endpoint: `POST /executar_pipeline/`
+- Entrada: `dados.zip`
+- Saída: `Base_VR_Pronta.xlsx`
+- Registro de tentativas, tempo e status por agente
 
-  * **`ATIVOS`**: Base principal de colaboradores ativos.
-  * **`ADMISSÃO_ABRIL`**: Lista de colaboradores admitidos no mês de referência.
-  * **`DESLIGADOS`**: Colaboradores que foram desligados.
-  * **`FÉRIAS`**: Lista de colaboradores de férias com a quantidade de dias.
-  * **`EXTERIOR`**: Colaboradores alocados fora do país.
-  * **`ESTÁGIO`**: Colaboradores estagiários.
-  * **`APRENDIZ`**: Colaboradores aprendizes.
-  * **`VR_MENSAL`**: Base de valores de VR já atribuídos.
-  * **`AFASTAMENTOS`**: Lista de colaboradores afastados.
-  * **`BASE_SINDICATO_X_VALOR`**: Mapeamento de sindicato para valor diário do VR.
-  * **`BASE_DIAS_UTEIS`**: Mapeamento de sindicato para a quantidade de dias úteis no mês.
+### 🧠 Agentes A2A
 
-### **Fluxo de Processamento**
+| Agente                  | Skill ID              | Função Técnica                                 |
+|------------------------|-----------------------|------------------------------------------------|
+| FileIngestAgent        | `load-zip`            | Extrai planilhas do ZIP                       |
+| ConsolidationAgent     | `consolidate-bases`   | Mescla ATIVOS + ADMISSÃO_ABRIL                |
+| EligibilityFilterAgent | `filter-ineligible`   | Remove colaboradores não elegíveis            |
+| DataImputationAgent    | `impute-data`         | Preenche sindicato, estado, dias úteis, valor |
+| AdjustmentAgent        | `apply-adjustments`   | Desconta férias, feriados e afastamentos      |
+| CalculationAgent       | `calculate-values`    | Calcula valores finais de VR                  |
+| ExcelExportAgent       | `export-excel`        | Gera planilha final `.xlsx`                   |
 
-O script executa uma série de passos lógicos para processar os dados e gerar o resultado final.
+---
 
-1.  **Consolidação das Bases:**
+## 📊 Interface Streamlit
 
-      * As bases **`ATIVOS`** e **`ADMISSÃO_ABRIL`** são mescladas em uma única base de dados principal.
+- Autenticação por usuário e senha
+- Upload do ZIP e execução do pipeline
+- Barra de progresso com mensagens por agente
+- Download do arquivo final
+- Histórico persistente com SQLite
+- Painel de auditoria com filtros, gráficos e exportação
+- Rastreamento por agente com tentativas, tempo e status
+- Alertas visuais para agentes com falhas ou lentidão
 
-2.  **Filtragem e Exclusão de Colaboradores:**
+---
 
-      * Os colaboradores que **não são elegíveis** ao benefício são removidos. Isso inclui:
-          * **Estagiários** e **Aprendizes**, com base na coluna `TÍTULO DO CARGO`.
-          * **Diretores**, com base na coluna `TÍTULO DO CARGO`.
-          * Colaboradores em **Afastamentos** em geral (como licença-maternidade), utilizando a matrícula para exclusão.
-          * Profissionais que atuam no **Exterior**, utilizando a matrícula para exclusão.
-          * Colaboradores que foram **desligados**, utilizando a matrícula para exclusão.
-          * Colaboradores com anotações de "não recebe VR" na coluna `OBSERVAÇÕES`.
+## 🔁 Recuperação e Rollback
 
-3.  **Mapeamento Inteligente de Dados:**
+- Cada agente tenta até 2 vezes
+- Falhas são registradas com mensagem de erro
+- Rollback usa o último estado válido
+- Pipeline continua mesmo com dados parciais
 
-      * Esta é a etapa mais crítica. O script usa uma lógica de "cascata" para preencher as informações necessárias:
-          * Ele usa a coluna `TITULO_DO_CARGO` para preencher o **Sindicato** de colaboradores recém-admitidos, se a informação estiver faltando.
-          * Em seguida, ele usa a planilha **`BASE_SINDICATO_X_VALOR`** para encontrar o **Estado** correspondente a cada sindicato.
-          * Com o sindicato definido, ele busca o número de **Dias Úteis** na planilha **`BASE_DIAS_UTEIS`**.
-          * Com o estado definido, ele busca o **Valor Diário do VR** na planilha **`BASE_SINDICATO_X_VALOR`**.
+---
 
-4.  **Ajustes e Descontos:**
+## 🚨 Alertas Inteligentes
 
-      * O script **desconta os dias de férias** com base na planilha `FÉRIAS`.
-      * Ele **desconta os feriados** com base no **Estado** de cada colaborador.
-      * Ele ajusta o número de dias com base nas regras de `AFASTAMENTOS`.
+- Detecta agentes com ≥3 falhas (erro/timeout)
+- Detecta agentes com tempo médio ≥5s
+- Exibe alertas visuais no painel
+- Pode ser estendido para notificações externas (Slack, e-mail, webhook)
 
-5.  **Cálculos Finais:**
+---
 
-      * O valor **`TOTAL`** é calculado multiplicando os `DIAS` elegíveis pelo `VALOR_DIARIO_VR`.
-      * O **`Custo_empresa`** é 80% do valor total.
-      * O **`Desconto_profissional`** é 20% do valor total.
+## 🗃️ Banco de Dados
 
-### **Saída**
+- SQLite local (`historico.db`)
+- Tabelas:
+  - `execucoes`: histórico por usuário
+  - `rastreamento_agente`: detalhes por agente
+- Suporte a PostgreSQL para produção
 
-Após o processamento, o script gera um único arquivo Excel chamado **`Base_VR_Pronta.xlsx`**, que contém todos os colaboradores elegíveis com os valores calculados em suas respectivas colunas. Este arquivo é disponibilizado para download.
+---
 
-### **Como Usar**
+## 🧪 Teste de Integração
 
-Para iniciar a automação, salve o código em um arquivo `automacao_vr.py` e execute o seguinte comando no terminal:
+1. Gere `dados.zip` com planilhas simuladas
+2. Envie via Swagger ou interface Streamlit
+3. Verifique resposta: `Base_VR_Pronta.xlsx` ou dados intermediários
+4. Acompanhe rastreamento e alertas no painel
 
-```bash
-streamlit run automacao_vr.py
-```
+---
 
-Isso abrirá uma interface web no seu navegador, onde você pode carregar o arquivo `.zip` para processar os dados.
+## 🐳 Deploy com Docker
+
+```Dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY . .
+RUN pip install --no-cache-dir -r requirements.txt
+EXPOSE 8501
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
