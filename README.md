@@ -1,12 +1,10 @@
-`markdown
-
-🧠 Sistema Multi-Agentes A2A para Cálculo de VR/VA
+# 🧠 Sistema Multi-Agentes A2A para Cálculo de VR/VA
 
 Este projeto implementa um pipeline distribuído para cálculo de vale-refeição (VR) e vale-alimentação (VA) utilizando agentes autônomos que se comunicam via protocolo A2A (Agent-to-Agent). Cada etapa do processo é executada por um agente remoto, coordenado por um orquestrador central com interface visual em Streamlit.
 
 ---
 
-🚀 Funcionalidades
+## 🚀 Funcionalidades
 
 - 📁 Upload de arquivo .zip com planilhas
 - 🧠 Execução do pipeline distribuído via orquestrador A2A
@@ -19,7 +17,7 @@ Este projeto implementa um pipeline distribuído para cálculo de vale-refeiçã
 
 ---
 
-🧩 Componentes
+## 🧩 Componentes
 
 🔗 Orquestrador
 
@@ -29,7 +27,7 @@ Este projeto implementa um pipeline distribuído para cálculo de vale-refeiçã
 - Saída: BaseVRPronta.xlsx
 - Registro de tentativas, tempo e status por agente
 
-🧠 Agentes A2A
+## 🧠 Agentes A2A
 
 | Agente                  | Skill ID              | Função Técnica                                 |
 |------------------------|-----------------------|------------------------------------------------|
@@ -43,7 +41,7 @@ Este projeto implementa um pipeline distribuído para cálculo de vale-refeiçã
 
 ---
 
-📊 Interface Streamlit
+## 📊 Interface Streamlit
 
 - Autenticação por usuário e senha
 - Upload do ZIP e execução do pipeline
@@ -56,7 +54,7 @@ Este projeto implementa um pipeline distribuído para cálculo de vale-refeiçã
 
 ---
 
-🔁 Recuperação e Rollback
+## 🔁 Recuperação e Rollback
 
 - Cada agente tenta até 2 vezes
 - Falhas são registradas com mensagem de erro
@@ -65,7 +63,7 @@ Este projeto implementa um pipeline distribuído para cálculo de vale-refeiçã
 
 ---
 
-🚨 Alertas Inteligentes
+## 🚨 Alertas Inteligentes
 
 - Detecta agentes com ≥3 falhas (erro/timeout)
 - Detecta agentes com tempo médio ≥5s
@@ -74,7 +72,7 @@ Este projeto implementa um pipeline distribuído para cálculo de vale-refeiçã
 
 ---
 
-🗃️ Banco de Dados
+## 🗃️ Banco de Dados
 
 - SQLite local (historico.db)
 - Tabelas:
@@ -84,7 +82,7 @@ Este projeto implementa um pipeline distribuído para cálculo de vale-refeiçã
 
 ---
 
-🧪 Teste de Integração
+## 🧪 Teste de Integração
 
 1. Gere dados.zip com planilhas simuladas
 2. Envie via Swagger ou interface Streamlit
@@ -93,7 +91,7 @@ Este projeto implementa um pipeline distribuído para cálculo de vale-refeiçã
 
 ---
 
-🐳 Deploy com Docker
+## 🐳 Deploy com Docker
 
 `Dockerfile
 FROM python:3.11-slim
@@ -106,7 +104,7 @@ CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0
 
 ---
 
-🌐 Deploy na Render
+## 🌐 Deploy na Render
 
 1. Crie repositório vr-streamlit-app no GitHub
 2. Suba os arquivos: app.py, db.py, Dockerfile, requirements.txt, .env
@@ -117,7 +115,7 @@ CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0
 
 ---
 
-📁 Estrutura do Projeto
+## 📁 Estrutura do Projeto
 
 `
 vr-streamlit-app/
@@ -131,8 +129,7 @@ vr-streamlit-app/
 
 ---
 
-🧠 Autor
+## 🧠 Autor
 
 Ramon — São Paulo, Brasil  
 Sistema desenvolvido com apoio do Microsoft Copilot 🤖
-`
