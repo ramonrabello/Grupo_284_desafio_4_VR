@@ -19,4 +19,3 @@ def filter_ineligible():
         },
         "id": "filter-ineligible"
     }
-}
