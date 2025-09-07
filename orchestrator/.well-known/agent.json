@@ -1,0 +1,12 @@
+{
+  "name": "EligibilityFilterAgent",
+  "description": "Filtra colaboradores não elegíveis ao VR",
+  "url": "https://eligibility-agent.onrender.com",
+  "authentication": { "schemes": ["bearer"] },
+  "skills": [
+    {
+      "id": "filter-ineligible",
+      "description": "Remove estagiários, aprendizes, diretores, afastados, etc."
+    }
+  ]
+}

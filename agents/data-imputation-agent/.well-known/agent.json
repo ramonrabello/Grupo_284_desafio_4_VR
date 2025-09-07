@@ -1,0 +1,12 @@
+{
+  "name": "DataImputationAgent",
+  "description": "Preenche sindicato, estado, dias úteis e valor diário",
+  "url": "https://data-imputation-agent.onrender.com",
+  "authentication": { "schemes": ["bearer"] },
+  "skills": [
+    {
+      "id": "impute-data",
+      "description": "Imputa dados faltantes com base nas planilhas de referência"
+    }
+  ]
+}
